@@ -1,0 +1,6 @@
+videos
+images
+__pycache__
+
+.venv
+*.pt
