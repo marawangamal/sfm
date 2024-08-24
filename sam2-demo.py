@@ -14,8 +14,6 @@ sam2_model = build_sam2(model_cfg, checkpoint, device=device)
 predictor = SAM2ImagePredictor(sam2_model)
 
 
-# from transformers import sam2
-
 IMG_PATH = "images/ball.jpg"
 INP_POINT = torch.tensor([[620, 720]])
 
