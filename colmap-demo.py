@@ -1,9 +1,12 @@
 import sqlite3
 import pycolmap
 import pathlib
-import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+from utils.colmap import (
+    visualize_keypoints,
+    visualize_matches,
+    colmap_pair_id_to_image_ids,
+)
 
 # output_path: pathlib.Path = pathlib.Path("output")
 # image_dir: pathlib.Path = pathlib.Path("images")
@@ -33,57 +36,20 @@ import matplotlib.pyplot as plt
 # reconstruction.write("output")
 
 
-def visualize_keypoints(image_path, keypoints):
-    image = cv2.imread(str(image_path))
+def extract_features(
+    database_path: pathlib.Path, image_dir: pathlib.Path, visualize: bool = False
+) -> None:
+    """Extracts features from images using COLMAP and optionally visualizes the keypoints.
 
-    # Check if the image was loaded correctly
-    if image is None:
-        print(f"Error: Unable to load image at {image_path}")
-        return
+    Args:
+        database_path (pathlib.Path): Path to the COLMAP database.
+        image_dir (pathlib.Path): Path to the directory containing images.
+        visualize (bool, optional): Whether to visualize keypoints of the first image. Defaults to False.
 
-    # Increase circle size and thickness for better visibility
-    for kp in keypoints:
-        x, y = int(kp[0]), int(kp[1])
-
-        # Ensure keypoints are within image bounds
-        if 0 <= x < image.shape[1] and 0 <= y < image.shape[0]:
-            cv2.circle(
-                image, (x, y), 5, (0, 255, 0), thickness=2
-            )  # Larger radius and thickness
-
-    plt.figure(figsize=(10, 10))  # Increase figure size for better visibility
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    plt.axis("off")  # Hide axes
-    plt.show()
-
-
-def visualize_matches(image_path1, keypoints1, image_path2, keypoints2, matches):
-    image1 = cv2.imread(str(image_path1))
-    image2 = cv2.imread(str(image_path2))
-    height1, width1 = image1.shape[:2]
-    height2, width2 = image2.shape[:2]
-
-    if image1 is None or image2 is None:
-        print(
-            f"[ERROR] Unable visualize matches - no images to load images at {image_path1} and {image_path2}"
-        )
-        return
-
-    output_image = np.zeros((max(height1, height2), width1 + width2, 3), dtype=np.uint8)
-    output_image[:height1, :width1] = image1
-    output_image[:height2, width1:] = image2
-
-    for match in matches:
-        pt1 = (int(keypoints1[match[0]][0]), int(keypoints1[match[0]][1]))
-        pt2 = (int(keypoints2[match[1]][0]) + width1, int(keypoints2[match[1]][1]))
-        cv2.line(output_image, pt1, pt2, (0, 255, 0), 1)
-
-    plt.imshow(cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB))
-    plt.show()
-    print(f"Visualized {len(matches)} matches")
-
-
-def extract_features(database_path, image_dir, visualize=False):
+    Returns:
+        None: Extracts features from images and stores them in the COLMAP database.
+        If visualize is True, displays the keypoints for the first image.
+    """
     pycolmap.extract_features(database_path, image_dir)
     if visualize:
         conn = sqlite3.connect(str(database_path))
@@ -93,7 +59,7 @@ def extract_features(database_path, image_dir, visualize=False):
         cursor.execute("SELECT image_id, name FROM images")
         images = cursor.fetchall()
 
-        # For each image, query keypoints
+        # For the first image only, query keypoints and visualize
         if images:
             image_id, image_name = images[0]
             cursor.execute(f"SELECT data FROM keypoints WHERE image_id={image_id}")
@@ -108,15 +74,20 @@ def extract_features(database_path, image_dir, visualize=False):
         conn.close()
 
 
-def pair_id_to_image_ids(pair_id):
-    image_id2 = pair_id % 2147483647
-    image_id1 = (
-        pair_id - image_id2
-    ) // 2147483647  # Use integer division to get the correct image_id1
-    return int(image_id1), int(image_id2)
+def match_features(
+    database_path: pathlib.Path, image_dir: pathlib.Path, visualize: bool = False
+) -> None:
+    """Matches features between images using COLMAP and optionally visualizes the matches.
 
+    Args:
+        database_path (pathlib.Path): Path to the COLMAP database.
+        image_dir (pathlib.Path): Path to the directory containing images.
+        visualize (bool, optional): Whether to visualize matches for the first pair of images. Defaults to False.
 
-def match_features(database_path, image_dir, visualize=False):
+    Returns:
+        None: Matches features between images and stores them in the COLMAP database.
+        If visualize is True, displays the matches for the first image pair.
+    """
     pycolmap.match_exhaustive(database_path)
     if visualize:
         conn = sqlite3.connect(str(database_path))
@@ -130,7 +101,7 @@ def match_features(database_path, image_dir, visualize=False):
             pair_id, matches_blob = match_data
 
             # Decode the pair_id to get the image IDs
-            image_id1, image_id2 = pair_id_to_image_ids(pair_id)
+            image_id1, image_id2 = colmap_pair_id_to_image_ids(pair_id)
 
             # Query image names based on image IDs
             cursor.execute("SELECT name FROM images WHERE image_id = ?", (image_id1,))
@@ -162,13 +133,21 @@ def match_features(database_path, image_dir, visualize=False):
         conn.close()
 
 
-def main():
+def main() -> None:
+    """Main function to extract features and match them using COLMAP.
 
-    # (1) Find interest points in each image
-    # (2) Find candidate correspondences (match descriptors for each interest point)
-    # (3) Perform geometric verification of correspondences (RANSAC + fundamental matrix)
-    # (4) Solve for 3D points and camera that minimize reprojection error.
+    This function:
+    1. Finds interest points in each image.
+    2. Finds candidate correspondences (match descriptors for each interest point).
+    3. Performs geometric verification of correspondences (RANSAC + fundamental matrix).
+    4. Solves for 3D points and camera that minimize reprojection error.
 
+    Args:
+        None
+
+    Returns:
+        None
+    """
     # Setup paths
     output_path = pathlib.Path("output")
     image_dir = pathlib.Path("images")
@@ -179,6 +158,9 @@ def main():
 
     # (2) Match features between images
     match_features(database_path, image_dir, visualize=True)
+
+    # (3) Perform geometric verification of correspondences (RANSAC + fundamental matrix)
+    # (4) Solve for 3D points and camera that minimize reprojection error.
 
 
 if __name__ == "__main__":
