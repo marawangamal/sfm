@@ -95,7 +95,7 @@ def visualize_matches(
     for match in matches:
         pt1 = (int(keypoints1[match[0]][0]), int(keypoints1[match[0]][1]))
         pt2 = (int(keypoints2[match[1]][0]) + width1, int(keypoints2[match[1]][1]))
-        cv2.line(output_image, pt1, pt2, (0, 255, 0), 2)  # Increased line thickness
+        cv2.line(output_image, pt1, pt2, (0, 255, 0), 1)  # Increased line thickness
 
     # Display the image with matches
     plt.imshow(cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB))

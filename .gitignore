@@ -1,9 +1,9 @@
 videos
-images
 images_all
 output
 __pycache__
 .venv
+checkpoints
 
 *.pt
 

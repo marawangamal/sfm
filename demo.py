@@ -1,3 +1,14 @@
+"""
+Script for performing feature extraction, feature matching, and 3D reconstruction using COLMAP with optional visualization.
+
+Steps:
+    1. Extract features from images and store them in a COLMAP database (output/database.db).
+    2. Match features between images using COLMAP.
+    3. Perform incremental 3D reconstruction based on matched features.
+    4. (Optional) Perform dense 3D reconstruction if COLMAP is built with CUDA.
+
+"""
+
 import sqlite3
 import pycolmap
 import pathlib
@@ -154,14 +165,15 @@ def dense_reconstruction(
         visualize_dense_reconstruction(mvs_path)
 
 
-def main(visualize: bool = False) -> None:
-    """Main function to extract features and match them using COLMAP.
+def main(visualize: bool = True) -> None:
+    """Main function to perform (1) feature extraction, (2) feature matching, (3) 3D reconstruction, and (4) dense reconstruction.
+
+    Results of each step are stored in a COLMAP database (output/database.db). The DB schema is described here https://colmap.github.io/database.html.
 
     Args:
-        None
+         visualize (bool, optional): Whether to visualize each step of the pipeline. Defaults to True.
 
-    Returns:
-        None
+     **Note**: Dense reconstruction requires building COLMAP with CUDA from source.
     """
     # Setup paths
     output_path = pathlib.Path("output")
