@@ -5,35 +5,10 @@ import numpy as np
 from utils.colmap import (
     visualize_keypoints,
     visualize_matches,
+    visualize_reconstruction,
+    visualize_dense_reconstruction,
     colmap_pair_id_to_image_ids,
 )
-
-# output_path: pathlib.Path = pathlib.Path("output")
-# image_dir: pathlib.Path = pathlib.Path("images")
-
-# mvs_path = output_path / "mvs"
-# database_path = output_path / "database.db"
-
-# out1 = pycolmap.extract_features(database_path, image_dir)
-# out2 = pycolmap.match_exhaustive(database_path)
-# maps = pycolmap.incremental_mapping(database_path, image_dir, output_path)
-# # points = list(maps[0].points3D.values())
-# maps[0].write(output_path)
-# # dense reconstruction
-# pycolmap.undistort_images(mvs_path, output_path, image_dir)
-
-# reconstruction = pycolmap.Reconstruction("output")
-# print(reconstruction.summary())
-
-# for image_id, image in reconstruction.images.items():
-#     print(image_id, image)
-
-# for point3D_id, point3D in reconstruction.points3D.items():
-#     print(point3D_id, point3D)
-
-# for camera_id, camera in reconstruction.cameras.items():
-#     print(camera_id, camera)
-# reconstruction.write("output")
 
 
 def extract_features(
@@ -133,14 +108,54 @@ def match_features(
         conn.close()
 
 
-def main() -> None:
-    """Main function to extract features and match them using COLMAP.
+def incremental_reconstruction(
+    database_path: pathlib.Path,
+    image_dir: pathlib.Path,
+    output_path: pathlib.Path,
+    visualize: bool = False,
+) -> pycolmap.Reconstruction:
+    """Performs incremental 3D reconstruction using COLMAP.
 
-    This function:
-    1. Finds interest points in each image.
-    2. Finds candidate correspondences (match descriptors for each interest point).
-    3. Performs geometric verification of correspondences (RANSAC + fundamental matrix).
-    4. Solves for 3D points and camera that minimize reprojection error.
+    Args:
+        database_path (pathlib.Path): Path to the COLMAP database.
+        image_dir (pathlib.Path): Path to the directory containing images.
+        output_path (pathlib.Path): Path to save the reconstruction output.
+
+    Returns:
+        pycolmap.Reconstruction: The resulting 3D reconstruction object.
+    """
+    maps = pycolmap.incremental_mapping(database_path, image_dir, output_path)
+    reconstruction = maps[0]
+    reconstruction.write(output_path)
+    if visualize:
+        visualize_reconstruction(reconstruction)
+
+
+def dense_reconstruction(
+    output_path: pathlib.Path,
+    image_dir: pathlib.Path,
+    mvs_path: pathlib.Path,
+    visualize: bool = False,
+) -> None:
+    """Performs dense 3D reconstruction using COLMAP.
+
+    Args:
+        output_path (pathlib.Path): Path where sparse reconstruction is saved.
+        image_dir (pathlib.Path): Path to the directory containing images.
+        mvs_path (pathlib.Path): Path to save the dense reconstruction output.
+
+    Returns:
+        None: Performs dense reconstruction and stores the results in the specified path.
+    """
+    pycolmap.undistort_images(mvs_path, output_path, image_dir)
+    pycolmap.patch_match_stereo(mvs_path)  # requires compilation with CUDA
+    pycolmap.stereo_fusion(mvs_path / "dense.ply", mvs_path)
+    if visualize:
+        visualize_dense_reconstruction(mvs_path)
+
+
+def main(visualize: bool = False) -> None:
+    """Main function to extract features and match them using COLMAP.
 
     Args:
         None
@@ -152,15 +167,24 @@ def main() -> None:
     output_path = pathlib.Path("output")
     image_dir = pathlib.Path("images")
     database_path = output_path / "database.db"
+    mvs_path = output_path / "mvs"
+
+    # Create output directories if they do not exist
+    output_path.mkdir(exist_ok=True)
 
     # (1) Extract features from images
-    extract_features(database_path, image_dir, visualize=True)
+    extract_features(database_path, image_dir, visualize=visualize)
 
     # (2) Match features between images
-    match_features(database_path, image_dir, visualize=True)
+    match_features(database_path, image_dir, visualize=visualize)
 
-    # (3) Perform geometric verification of correspondences (RANSAC + fundamental matrix)
-    # (4) Solve for 3D points and camera that minimize reprojection error.
+    # (3) Sparse reconstruction
+    incremental_reconstruction(
+        database_path, image_dir, output_path, visualize=visualize
+    )
+
+    # (4) Dense reconstruction (Requires building COLMAP with CUDA from source)
+    # dense_reconstruction(output_path, image_dir, mvs_path, visualize=visualize)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,11 @@
+from typing import Tuple
+
 import pathlib
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Tuple
+import open3d as o3d
+import pycolmap
 
 
 def colmap_pair_id_to_image_ids(pair_id: int) -> Tuple[int, int]:
@@ -99,3 +102,53 @@ def visualize_matches(
     plt.axis("off")  # Hide axes
     plt.show()
     print(f"Visualized {len(matches)} matches")
+
+
+def visualize_reconstruction(reconstruction: pycolmap.Reconstruction) -> None:
+    """Visualizes the 3D points from the reconstruction.
+
+    Args:
+        reconstruction (pycolmap.Reconstruction): The 3D reconstruction to visualize.
+
+    Returns:
+        None: Displays a 3D plot of the reconstructed points.
+    """
+    points3D = np.array([point.xyz for point in reconstruction.points3D.values()])
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(points3D[:, 0], points3D[:, 1], points3D[:, 2], s=1)
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_title("3D Reconstruction")
+    plt.show()
+    print(f"Visualized {len(points3D)} 3D points")
+
+
+def visualize_dense_reconstruction(mvs_path: pathlib.Path) -> None:
+    """Visualizes the dense 3D reconstruction.
+
+    Args:
+        mvs_path (pathlib.Path): Path to the directory containing the dense reconstruction results.
+
+    Returns:
+        None: Displays a 3D visualization of the dense point cloud or mesh.
+    """
+    # Load the point cloud or mesh from the dense reconstruction
+    dense_cloud_path = (
+        mvs_path / "fused.ply"
+    )  # Assuming the output is saved as fused.ply
+    if dense_cloud_path.exists():
+        # Load the point cloud
+        pcd = o3d.io.read_point_cloud(str(dense_cloud_path))
+
+        # Visualize the point cloud
+        o3d.visualization.draw_geometries(
+            [pcd], window_name="Dense Reconstruction", width=800, height=600
+        )
+    else:
+        print(
+            f"[ERROR] Dense cloud not found at {dense_cloud_path}. Ensure that the reconstruction completed successfully."
+        )
